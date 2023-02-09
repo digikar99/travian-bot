@@ -114,20 +114,21 @@
 
 (defun upgrade-building (name &optional wait)
   (declare (optimize debug))
-  (let ((building (find-building-element name)))
-    (unless building
-      (error "No building with name ~A" name))
-    (delay)
-    (let* ((elements (pymethod building "children" :recursive t))
-           (level-button
-             (iter (for elt in-sequence elements)
-               (when (string= "a" (pyslot-value elt "tag_name"))
-                 (return elt)))))
-      (pymethod level-button "click"))
-    (click-upgrade-button)
-    (notify-build-start name)
-    (when wait
-      (notify-when-build-complete name)))
+  (bt:with-recursive-lock-held (*task-lock*)
+    (let ((building (find-building-element name)))
+      (unless building
+        (error "No building with name ~A" name))
+      (delay)
+      (let* ((elements (pymethod building "children" :recursive t))
+             (level-button
+               (iter (for elt in-sequence elements)
+                 (when (string= "a" (pyslot-value elt "tag_name"))
+                   (return elt)))))
+        (pymethod level-button "click"))
+      (click-upgrade-button)
+      (notify-build-start name)))
+  (when wait
+    (notify-when-build-complete name))
   t)
 
 (defun upgrade-buildings (&rest names)
@@ -136,15 +137,17 @@
 
 (defun upgrade-resource-field (id &optional wait)
   (ensure-page :resources)
-  (let* ((resource-field-elements
-           (pymethod *driver* "find_elements" "xpath" "//a[contains(@class, \"level\")]"))
-         (resource-field-element
-           (get-val resource-field-elements (1- id))))
-    (pymethod resource-field-element "click")
-    (click-upgrade-button)
-    (notify-build-start id)
-    (when wait
-      (notify-when-build-complete id))))
+  (bt:with-recursive-lock-held (*task-lock*)
+    (let* ((resource-field-elements
+             (pymethod *driver* "find_elements" "xpath" "//a[contains(@class, \"level\")]"))
+           (resource-field-element
+             (get-val resource-field-elements (1- id))))
+      (pymethod resource-field-element "click")
+      (click-upgrade-button)
+      (notify-build-start id)))
+  (when wait
+    (notify-when-build-complete id))
+  t)
 
 (defun upgrade-resource-fields (&rest ids)
   (loop :for id :in ids
@@ -163,11 +166,40 @@
             (when (string= "Explore" (pyslot-value elt "text"))
               (collect elt)))))
     (delay)
-    (pymethod (get-val explore-buttons 0) "click")
-    (delay)
-    (ensure-page :resources)))
+    (when (< 0 (length explore-buttons))
+      (pymethod (get-val explore-buttons 0) "click")
+      (delay))
+    (ensure-page :resources)
+    (not (zerop (length explore-buttons)))))
 
-;; (adventure-send)
+(defvar *adventure-thread*)
+
+(defvar *task-lock* (bt:make-recursive-lock "travian-task-lock"))
+
+(defun hero-in-village-p ()
+  (bt:with-recursive-lock-held (*task-lock*)
+    (ensure-page :resources)
+    (let ((troops-element
+            (get-val (pymethod *driver* "find_elements" "xpath"
+                               "//table[@id=\"troops\"]")
+                     0)))
+      (str:containsp "Hero" (pyslot-value troops-element "text")))))
+
+(defun start-adventure-thread (&optional (poll-interval 1))
+  (when (and (boundp '*adventure-thread*)
+             (bt:thread-alive-p *adventure-thread*))
+    (return-from start-adventure-thread nil))
+  (setq *adventure-thread*
+        (bt:make-thread
+         (lambda ()
+           (loop :do (bt:with-recursive-lock-held (*task-lock*)
+                       (when (hero-in-village-p)
+                         (when (adventure-send)
+                           (format t "Travian: Sent hero on an adventure!~%"))))
+                     (sleep poll-interval)))
+         :name "travian-adventure-thread")))
+
+  ;; (adventure-send)
 
 (defun collect-rewards ()
   (ensure-page :tasks)
