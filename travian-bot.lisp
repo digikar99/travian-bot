@@ -34,7 +34,8 @@
 (defparameter *page-table*
   (alist-hash-table (list (cons :buildings "dorf2.php")
                           (cons :resources "dorf1.php")
-                          (cons :adventures "hero/adventures"))
+                          (cons :adventures "hero/adventures")
+                          (cons :tasks "tasks"))
                     :test #'equal))
 
 (defun get-page (page-key-or-name)
@@ -163,6 +164,21 @@
               (collect elt)))))
     (delay)
     (pymethod (get-val explore-buttons 0) "click")
+    (delay)
     (ensure-page :resources)))
 
 ;; (adventure-send)
+
+(defun collect-rewards ()
+  (ensure-page :tasks)
+  (let ((collect-buttons
+          (remove-if-not (lambda (elt)
+                           (string= "Collect" (pyslot-value elt "text")))
+                         (pymethod *driver* "find_elements" "xpath"
+                                   "//div[@class=\"progress\"]//button"))))
+    (iter (for button in-sequence collect-buttons)
+      (delay)
+      (pymethod button "click"))
+    (delay)
+    (ensure-page :resources))
+  t)

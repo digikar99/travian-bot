@@ -12,9 +12,11 @@
            #:upgrade-building
            #:upgrade-resource-field
            #:upgrade
-           #:adventure-send
 
            #:enqueue-upgrades
-           #:start-build-thread))
+           #:start-build-thread
+
+           #:adventure-send
+           #:collect-rewards))
 
 (in-package :travian-bot)
