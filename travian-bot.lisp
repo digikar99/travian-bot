@@ -98,14 +98,18 @@
 (defun notify-when-build-complete (&optional name (poll-interval 1))
   (loop :while (remaining-build-duration)
         :do (sleep poll-interval)
-        :finally (uiop:run-program (format nil
-                                           "notify-send 'Travian: ~A Building Complete!'"
-                                           (or name "")))))
+        :finally (let ((message (format nil "Travian: ~A Building Complete!"
+                                        (or name ""))))
+                   (format t message)
+                   (terpri)
+                   (uiop:run-program (format nil "notify-send '~A'" message)))))
 
 (defun notify-build-start (&optional name)
-  (uiop:run-program (format nil
-                            "notify-send 'Travian: ~A Building Started'"
-                            (or name ""))))
+  (let ((message (format nil "Travian: ~A Building Started"
+                         (or name ""))))
+    (format t message)
+    (terpri)
+    (uiop:run-program (format nil "notify-send '~A'" message))))
 
 (defun upgrade-building (name &optional wait)
   (declare (optimize debug))
@@ -145,12 +149,10 @@
   (loop :for id :in ids
         :do (upgrade-resource-field id t)))
 
-(defun upgrade (&rest names-or-ids)
-  (notify-when-build-complete "Previous")
-  (loop :for name-or-id :in names-or-ids
-        :do (etypecase name-or-id
-              (string (upgrade-building name-or-id t))
-              ((integer 1 18) (upgrade-resource-field name-or-id t)))))
+(defun upgrade (name-or-id &optional wait)
+  (etypecase name-or-id
+    (string (upgrade-building name-or-id wait))
+    ((integer 1 18) (upgrade-resource-field name-or-id wait))))
 
 (defun adventure-send ()
   (ensure-page :adventures)
@@ -159,5 +161,8 @@
                      (pymethod *driver* "find_elements" "xpath" "//button"))
             (when (string= "Explore" (pyslot-value elt "text"))
               (collect elt)))))
+    (delay)
     (pymethod (get-val explore-buttons 0) "click")
     (ensure-page :resources)))
+
+;; (adventure-send)

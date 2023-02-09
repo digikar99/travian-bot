@@ -3,13 +3,18 @@
   (:local-nicknames (:json :shasht))
   (:export #:start-bot
            #:login
+
            #:get-page
            #:ensure-page
-           #:upgrade-building
+
            #:remaining-build-duration
            #:notify-when-build-complete
+           #:upgrade-building
            #:upgrade-resource-field
-           #:upgrade-resource-fields
-           #:adventure-send))
+           #:upgrade
+           #:adventure-send
+
+           #:enqueue-upgrades
+           #:start-build-thread))
 
 (in-package :travian-bot)
